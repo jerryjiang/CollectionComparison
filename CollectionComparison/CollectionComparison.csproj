@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Title>CollectionComparison</Title>
+    <Description>A simple library to compare collections respect item order, aka diff view.</Description>
+    <Authors>Jerry Jiang</Authors>
+    <Version>0.0.1</Version>
+    <PackageProjectUrl>https://github.com/jerryjiang/CollectionComparison</PackageProjectUrl>
+    <PackageTags>Collection;Compare;Diff</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/jerryjiang/CollectionComparison.git</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>
