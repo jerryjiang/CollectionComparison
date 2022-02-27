@@ -40,6 +40,96 @@
             }
         }
 
+        private List<CollectionComparisonResult> CompareItems(List<OrderedItem> leftItems, List<OrderedItem> rightItems, double minimumSimilarity)
+        {
+            var candidates = new Dictionary<int, CollectionComparisonResult>
+            {
+                {
+                    0,
+                    new CollectionComparisonResult
+                    {
+                        Left = new OrderedItem { Index = -1 },
+                        Right = new OrderedItem { Index = -1 },
+                        Chain = null
+                    }
+                }
+            };
+
+            foreach (var leftItem in leftItems)
+            {
+                var matchedIndices = new List<(OrderedItem Item, double Similarity)>();
+
+                foreach (var rightItem in rightItems)
+                {
+                    var similarity = _objectComparer.Compare(leftItem.Value, rightItem.Value);
+
+                    if (similarity < minimumSimilarity)
+                    {
+                        // Similarity too low, drop the result.
+                        continue;
+                    }
+
+                    matchedIndices.Add((rightItem, similarity));
+                }
+
+                var targetPos = 0;
+                var parentPos = 0;
+
+                var candidate = candidates[0];
+
+                for (var jX = 0; jX < matchedIndices.Count; jX++)
+                {
+                    var right = matchedIndices[jX].Item;
+                    var similarity = matchedIndices[jX].Similarity;
+
+                    for (parentPos = targetPos; parentPos < candidates.Count; parentPos++)
+                    {
+                        if ((candidates[parentPos].Right.Index < right.Index) &&
+                            ((parentPos == candidates.Count - 1) || (candidates[parentPos + 1].Right.Index > right.Index)))
+                        {
+                            break;
+                        }
+                    }
+
+                    if (parentPos < candidates.Count)
+                    {
+                        var newCandidate = new CollectionComparisonResult
+                        {
+                            Left = leftItem,
+                            Right = right,
+                            Similarity = similarity,
+                            ResultType = similarity == 1 ? ResultType.Identical : ResultType.Different,
+                            Chain = candidates[parentPos]
+                        };
+
+                        candidates[targetPos] = candidate;
+                        targetPos = parentPos + 1;
+                        candidate = newCandidate;
+
+                        if (targetPos == candidates.Count)
+                        {
+                            break; // no point in examining further (j)s
+                        }
+                    }
+                }
+
+                candidates[targetPos] = candidate;
+            }
+
+            var child = candidates[candidates.Count - 1];
+            var solution = new List<CollectionComparisonResult>();
+
+            while (child != null && child.Left.Index >= 0)
+            {
+                solution.Add(child);
+                child = child.Chain;
+            }
+
+            solution.Reverse();
+
+            return solution;
+        }
+
         private static void ExpandSolution(List<CollectionComparisonResult> solution, List<OrderedItem> leftItems, List<OrderedItem> rightItems)
         {
             var leftEndIndex = leftItems.Count - 1;
@@ -102,123 +192,6 @@
                     ResultType = ResultType.LeftOnly
                 });
             }
-        }
-
-        private List<CollectionComparisonResult> CompareItems(List<OrderedItem> leftItems, List<OrderedItem> rightItems, double minimumSimilarity)
-        {
-            var leafNodes = new List<SolutionNode>();
-            var rootNode = CreateRootNode();
-            var optimalNode = rootNode;
-
-            leafNodes.Add(rootNode);
-
-            foreach (var leftItem in leftItems)
-            {
-                foreach (var rightItem in rightItems)
-                {
-                    var similarity = _objectComparer.Compare(leftItem.Value, rightItem.Value);
-
-                    if (similarity < minimumSimilarity)
-                    {
-                        // Similarity too low, drop the result.
-                        continue;
-                    }
-
-                    var result = new CollectionComparisonResult
-                    {
-                        Similarity = similarity,
-                        ResultType = similarity == 1 ? ResultType.Identical : ResultType.Different,
-                        Left = leftItem,
-                        Right = rightItem,
-                    };
-
-                    AttachToTree(leafNodes, result, ref optimalNode);
-                }
-            }
-
-            var child = optimalNode;
-            var solution = new List<CollectionComparisonResult>();
-
-            while (child != null && child != rootNode)
-            {
-                solution.Add(child.Result);
-                child = child.Parent;
-            }
-
-            solution.Reverse();
-
-            return solution;
-        }
-
-        private static void AttachToTree(List<SolutionNode> leafNodes, CollectionComparisonResult result, ref SolutionNode optimalNode)
-        {
-            var processedParents = new List<SolutionNode>();
-
-            for (int i = leafNodes.Count - 1; i >= 0; i--)
-            {
-                var currentLeaf = leafNodes[i];
-                var potentialParent = currentLeaf;
-
-                do
-                {
-                    if (processedParents.Contains(potentialParent))
-                    {
-                        break;
-                    }
-
-                    if (potentialParent.Result.Left.Index < result.Left.Index &&
-                        potentialParent.Result.Right.Index < result.Right.Index)
-                    {
-                        var newLeaf = new SolutionNode
-                        {
-                            Parent = potentialParent,
-                            Weight = potentialParent.Weight + result.Similarity,
-                            Result = result
-                        };
-
-                        if (optimalNode == null ||
-                            optimalNode.Weight < newLeaf.Weight)
-                        {
-                            optimalNode = newLeaf;
-                        }
-
-                        leafNodes.Add(newLeaf);
-                        potentialParent.Children.Add(newLeaf);
-                        processedParents.Add(potentialParent);
-
-                        break;
-                    }
-
-                    potentialParent = potentialParent.Parent;
-                } while (null != potentialParent);
-
-                // When the new node append to the current leaf,
-                // current leaf will no longer a leaf.
-                if (currentLeaf.Children.Count > 0)
-                {
-                    leafNodes.Remove(currentLeaf);
-                }
-            }
-        }
-
-        private static SolutionNode CreateRootNode()
-        {
-            return new SolutionNode
-            {
-                Weight = 0,
-                Result = new CollectionComparisonResult
-                {
-                    Similarity = 0,
-                    Left = new OrderedItem
-                    {
-                        Index = -1
-                    },
-                    Right = new OrderedItem
-                    {
-                        Index = -1
-                    }
-                }
-            };
         }
 
         private static List<OrderedItem> GetOrderedItems<T>(IEnumerable<T> values)
